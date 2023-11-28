@@ -1,0 +1,68 @@
+* {
+background-color: black;
+font-family: "Courier", sans-serif;
+}
+
+QLabel {
+     color: #fff4c9; /* White text color */
+     font-size: 20px;
+     font-weight: bold; /* Bold text */
+     background-color: transparent; /* Transparent background */
+}
+
+QLineEdit {
+    color: #fff4c9; /* White text color */
+    font-size: 20px;
+    font-weight: bold; /* Bold text */
+    background-color: transparent; /* Transparent background */
+    border: 2px solid rgb(100, 100, 100); /* Set border width and color */
+    border-radius: 5px; /* Set border radius */
+    padding: 0px; /* Add some padding to the text */
+}
+
+QLineEdit:focus {
+    border-color: rgb(150, 150, 150);
+}
+
+
+QPushButton {
+     background-color: #EEEEEE; /* Dark gray background */
+     border-radius: 5px;
+     color: #FFFFFF; /* White text color */
+
+}
+
+QPushButton:hover {
+    background-color: #DDDDDD; /* Slightly lighter gray on hover */
+}
+
+QPushButton:pressed {
+    background-color: #333333; /* Slightly darker gray when pressed */
+
+QSlider {
+    min-height: 20px;
+}
+
+QWidget{
+    Background: #fff4c9;
+    color: #fff4c9;
+    font:12px bold;
+    font-weight:bold;
+    border-radius: 1px;
+    height: 11px;
+}
+
+QDialog{
+    Background-image:url('img/titlebar bg.png');
+    font-size:12px;
+    color: black;
+
+}
+QToolButton{
+    Background:#AA00AA;
+    font-size:11px;
+}
+QToolButton:hover{
+    Background: #FF00FF;
+    font-size:11px;
+}
