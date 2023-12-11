@@ -37,8 +37,8 @@ class TimeTrace(QMainWindow):
         super().__init__()
         self.resize(1536, 864)  # Set width and height as desired
         self.setWindowTitle('TimeTrace')
-        self.setWindowIcon(QIcon('../Data/icons/audio-waves.png'))
-        with open("../Data/style.css", "r") as file: self.setStyleSheet(file.read()) # Read styles from sheet
+        self.setWindowIcon(QIcon('./data/icons/audio-waves.png'))
+        with open("./data/style.css", "r") as file: self.setStyleSheet(file.read()) # Read styles from sheet
         self.init_defaults()  # Initialize default settings and parameters
         self.init_ui()  # Initialize the user interface
 
@@ -86,11 +86,11 @@ class TimeTrace(QMainWindow):
         self.plot_widget_layout = QVBoxLayout()
 
         """ Create all buttons """
-        self.save_button = CustomPushButton("../Data/icons/save-file.png", self.save_audio, "Save audio", size=35)
-        self.report_button = CustomPushButton("../Data/icons/report.png", self.write_report, "Write report", size=35)
-        self.listen_button = CustomPushButton("../Data/icons/listen-on.png", self.on_listen, "Start listening", size=35)
-        self.whisper_button = CustomPushButton("../Data/icons/whisper-on.png", self.on_whisper, "Start whispering", size=35)
-        self.control_button = CustomPushButton("../Data/icons/control.png", self.open_settings, "Open settings", size=35)
+        self.save_button = CustomPushButton("./data/icons/save-file.png", self.save_audio, "Save audio", size=35)
+        self.report_button = CustomPushButton("./data/icons/report.png", self.write_report, "Write report", size=35)
+        self.listen_button = CustomPushButton("./data/icons/listen-on.png", self.on_listen, "Start listening", size=35)
+        self.whisper_button = CustomPushButton("./data/icons/whisper-on.png", self.on_whisper, "Start whispering", size=35)
+        self.control_button = CustomPushButton("./data/icons/control.png", self.open_settings, "Open settings", size=35)
 
         """ Create all labels"""
         self.day_rate_label = CustomLabel(self.rate)
@@ -289,11 +289,11 @@ class TimeTrace(QMainWindow):
                 self.timer3.start(int(round(self.interval * 1000)))
 
                 # Set icon
-                self.listen_button.setIcon(QIcon("../Data/icons/listen-off.png"))
+                self.listen_button.setIcon(QIcon("./data/icons/listen-off.png"))
 
             else:
                 self.cleanup()
-                self.listen_button.setIcon(QIcon("../Data/icons/listen-on.png"))
+                self.listen_button.setIcon(QIcon("./data/icons/listen-on.png"))
 
         except Exception as e:
             print(f"Error in on_listen: {e}")
@@ -310,10 +310,10 @@ class TimeTrace(QMainWindow):
 
             if self.toggle_whisper.is_set():
                 self.toggle_whisper.clear()
-                self.whisper_button.setIcon(QIcon("../Data/icons/whisper-on.png"))
+                self.whisper_button.setIcon(QIcon("./data/icons/whisper-on.png"))
             else:
                 self.toggle_whisper.set()
-                self.whisper_button.setIcon(QIcon("../Data/icons/whisper-off.png"))
+                self.whisper_button.setIcon(QIcon("./data/icons/whisper-off.png"))
 
         except Exception as e:
             print(f"Error in on_listen: {e}")

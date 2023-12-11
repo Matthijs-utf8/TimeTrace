@@ -31,8 +31,8 @@ class ReportWindow(QDialog):
         super().__init__()
         self.app = app
         self.setFixedWidth(800)
-        self.setWindowIcon(QIcon('../Data/icons/audio-waves.png'))
-        self.setStyleSheet(open("../Data/style.css").read())
+        self.setWindowIcon(QIcon('data/icons/audio-waves.png'))
+        self.setStyleSheet(open("style.css").read())
         self.min_label_width = 300
         self.initUI()
 
@@ -197,7 +197,7 @@ class ReportWindow(QDialog):
         Args:
             c (canvas.Canvas): The PDF canvas.
         """
-        image_path = '../Data/icons/audio-waves.png'
+        image_path = 'data/icons/audio-waves.png'
         c.drawImage(image_path, 50, 15, width=11, height=11)  # Adjust the coordinates and size as needed
 
     def save_user_name(self):

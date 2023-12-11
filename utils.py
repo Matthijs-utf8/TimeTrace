@@ -28,7 +28,7 @@ def bandpass(data: np.ndarray, low: float, high: float, fs: int, order: int = 2)
     return y
 
 
-def find_beat_peaks(peaks: np.ndarray, prominences: np.ndarray, sampling_rate: int, last_tic: list = []) -> np.ndarray:
+def find_beat_peaks(peaks: list, sampling_rate: int, last_tic: list = []) -> np.ndarray:
     """
     Find the best set of three peaks representing beats.
 
@@ -41,8 +41,6 @@ def find_beat_peaks(peaks: np.ndarray, prominences: np.ndarray, sampling_rate: i
     Returns:
         np.ndarray: Best set of three peaks representing beats.
     """
-    # Convert to list for indexing purposes
-    peaks_list = list(peaks)
 
     # Chronological order of shocks and their descriptions:
     # 1. Unlocking: the impulse jewel striking the notch
@@ -59,13 +57,14 @@ def find_beat_peaks(peaks: np.ndarray, prominences: np.ndarray, sampling_rate: i
 
     # Function to check if three peaks are close together
     def are_peaks_close(peak_set):
-        beat_duration = peak_set[2] - peak_set[0]
-        unlocking_duration = peak_set[1] - peak_set[0]
-        drop_duration = peak_set[2] - peak_set[1]
+        peak_locations = [peak[0] for peak in peak_set]
+        beat_duration = peak_locations[2] - peak_locations[0]
+        unlocking_duration = peak_locations[1] - peak_locations[0]
+        drop_duration = peak_locations[2] - peak_locations[1]
 
         if len(last_tic) > 0:
-            if (any(((peak_set - last_tic) < - (10 * sampling_rate / 1000))) or
-                    any(((peak_set - last_tic) > (10 * sampling_rate / 1000)))):
+            if (any(((peak_locations - last_tic) < - (10 * sampling_rate / 1000))) or
+                    any(((peak_locations - last_tic) > (10 * sampling_rate / 1000)))):
                         return None
 
         return (MIN_BEAT_DURATION <= beat_duration <= MAX_BEAT_DURATION and
@@ -73,12 +72,14 @@ def find_beat_peaks(peaks: np.ndarray, prominences: np.ndarray, sampling_rate: i
                 MIN_DROP_DURATION <= drop_duration <= MAX_DROP_DURATION)
 
     # Find all sets of three peaks that are close together
-    close_peak_sets = [list(sorted(comb)) for comb in itertools.combinations(peaks_list, 3) if are_peaks_close(comb)]
+    close_peak_sets = [list(sorted(comb)) for comb in itertools.combinations(peaks, 3) if are_peaks_close(comb)]
     if len(close_peak_sets) < 1:
-        return []
-    prominence_sums = [sum(prominences[peaks_list.index(peak)] for peak in peak_set) for peak_set in close_peak_sets]
-    best_set = close_peak_sets[np.argmax(prominence_sums)]
-    return np.array(best_set)
+        return np.array([])
+
+    # Calculate prominence sums using the height from the tuples
+    prominence_sums = [sum(peak[1] for peak in peak_set) for peak_set in close_peak_sets]
+    best_peak_set = close_peak_sets[np.argmax(prominence_sums)]
+    return np.array([peak[0] for peak in best_peak_set])
 
 
 def moving_std(data: np.ndarray, window_size: int) -> np.ndarray:
@@ -98,6 +99,81 @@ def moving_std(data: np.ndarray, window_size: int) -> np.ndarray:
     return np.pad(stds, (pad_size - pad_size // 2, pad_size // 2), mode='constant', constant_values=0)
 
 
+def moving_std_dev(data, window_size):
+    if len(data) < window_size:
+        # Handle case where data is shorter than the window size
+        return None
+
+    sum_ = sum(data[:window_size])
+    sum_of_squares = sum(x ** 2 for x in data[:window_size])
+    std_devs = []
+
+    for i in range(len(data) - window_size + 1):
+        mean = sum_ / window_size
+        variance = (sum_of_squares / window_size) - (mean ** 2)
+        std_dev = np.sqrt(variance)
+        std_devs.append(std_dev)
+
+        # Update sums for next window
+        if i + window_size < len(data):
+            sum_ -= data[i]
+            sum_ += data[i + window_size]
+            sum_of_squares -= data[i] ** 2
+            sum_of_squares += data[i + window_size] ** 2
+
+    # Padding to make the length equal to the original data
+    pad_size = window_size - 1
+    return np.pad(std_devs, (pad_size - pad_size // 2, pad_size // 2), mode='constant', constant_values=0)
+
+
+def moving_std_dev_welford(data, window_size):
+    if len(data) < window_size:
+        return None
+
+    def update(existingAggregate, newValue, oldValue=None):
+        (count, mean, M2) = existingAggregate
+        count += 1
+        delta = newValue - mean
+        mean += delta / count
+        delta2 = newValue - mean
+        M2 += delta * delta2
+
+        if oldValue is not None:
+            count -= 1
+            delta = oldValue - mean
+            mean -= delta / count
+            delta2 = oldValue - mean
+            M2 -= delta * delta2
+
+        return (count, mean, M2)
+
+    def finalize(existingAggregate):
+        (count, mean, M2) = existingAggregate
+        if count < 2:
+            return float('nan')
+        else:
+            variance = M2 / count
+            return np.sqrt(variance)
+
+    std_devs = []
+    aggregate = (0, 0.0, 0.0)
+
+    # Initialize aggregate for the first window
+    for i in range(window_size):
+        aggregate = update(aggregate, data[i])
+
+    for i in range(len(data) - window_size + 1):
+        std_dev = finalize(aggregate)
+        std_devs.append(std_dev)
+
+        if i + window_size < len(data):
+            aggregate = update(aggregate, data[i + window_size], data[i])
+
+    # Padding to make the length equal to the original data
+    pad_size = window_size - 1
+    return np.pad(std_devs, (pad_size - pad_size // 2, pad_size // 2), mode='constant', constant_values=0)
+
+
 def guess_bph(signal_data: np.ndarray, fs: int) -> float:
     """
     Estimate beats per hour (BPH) from the input signal data.
@@ -110,18 +186,22 @@ def guess_bph(signal_data: np.ndarray, fs: int) -> float:
         float: Estimated BPH.
     """
     # Convert signal data to 1 second sample
-    signal_data = np.abs(np.array(signal_data[:fs]))
+    # signal_data = np.abs(np.array(signal_data[:fs]))
 
     # Smooth the data
-    signal_data = bandpass(signal_data, 5, 10, fs)
+    signal_data = moving_std_dev_welford(signal_data[:fs], int(1 * fs / 1000))
+
 
     # Correlate the data and compute the power spectrum
     correlation = np.correlate(signal_data, signal_data, mode='full')
     correlation = correlation[len(correlation) // 2:]
-    power_spectral_density = np.abs(np.fft.fft(correlation)) ** 2
+    peaks, properties = find_peaks(correlation, distance=(fs/10)*0.99, prominence=0)
+    peaks = peaks[peaks >= (fs/10)*0.99]
+    bps = round(fs / peaks[0])
 
-    # Find the best fit between 5 and 10 BPS
-    bps = np.argmax(power_spectral_density[:len(power_spectral_density) // 2][5:10]) + 5
+    ### OLD CALCULATIONS USING POWR SPECTRAL DENSITY (LESS ROBUST THAN CURRENT METHOD) ###
+    # power_spectral_density = np.abs(np.fft.fft(correlation)) ** 2
+    # bps = np.argmax(power_spectral_density[:len(power_spectral_density) // 2][5:10]) + 5
 
     return bps * 3600
 
@@ -246,7 +326,7 @@ def extract_peaks(queue, fs, liftangle, labels_queue, tics_queue):
             # Smooth the signal
             audio = bandpass(audio, 5000, 11000, fs)
             audio = audio / max(np.abs(audio))
-            _moving_std = moving_std(audio, int(2 * fs / 1000))
+            _moving_std = moving_std_dev_welford(audio, int(2 * fs / 1000))
 
             # Extract parameters
             chunk_size = len(audio)
@@ -255,13 +335,16 @@ def extract_peaks(queue, fs, liftangle, labels_queue, tics_queue):
             # Find peaks
             peaks, attrs = find_peaks(_moving_std, height=np.std(_moving_std), width=int(1 * fs / 1000))
 
-            # Split peaks into tic and tac
-            tic_peaks = peaks[peaks < (chunk_size / 2)]
-            tac_peaks = peaks[peaks >= (chunk_size / 2)]
+            # Create tuples of (peak_location, peak_height)
+            peak_tuples = [(peak, attrs["peak_heights"][i]) for i, peak in enumerate(peaks)]
 
-            # Extract tics and tacs from the peaks
-            tic = find_beat_peaks(tic_peaks, attrs["peak_heights"], fs)
-            tac = find_beat_peaks(tac_peaks, attrs["peak_heights"], fs)
+            # Split peaks into tic and tac based on their locations
+            tic_peak_tuples = [pt for pt in peak_tuples if pt[0] < (chunk_size / 2)]
+            tac_peak_tuples = [pt for pt in peak_tuples if pt[0] >= (chunk_size / 2)]
+
+            # Extract tics and tacs from the peak tuples
+            tic = find_beat_peaks(tic_peak_tuples, fs)
+            tac = find_beat_peaks(tac_peak_tuples, fs)
 
             # Add the tic and tac to their respective deque
             if len(tic) == len(tac) == 3:
