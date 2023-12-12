@@ -116,9 +116,11 @@ class TimeTrace(QMainWindow):
         """ Create a plot widget for the dotted plot """
         self.dotted_widget = pg.PlotWidget()
         self.dotted_widget.plotItem.setMouseEnabled(x=False)
+        self.dotted_widget.getPlotItem().hideAxis('left')  # This line removes the x-axis
         self.scatterplotitem = pg.ScatterPlotItem(size=5, brush=pg.mkBrush(255, 240, 200, 120))
         self.dotted_widget.addItem(self.scatterplotitem)
         self.plot_widget_layout.addWidget(self.dotted_widget)
+        self.current_x_lim = -1
 
         """ Add live signal graph to window """
         self.live_widget = pg.PlotWidget()
@@ -367,20 +369,22 @@ class TimeTrace(QMainWindow):
             tac (ndarray): Array of three tac values.
         """
 
-        if t > self.dotted_widget.plotItem.viewRange()[0][1] or t == 0:
+        if t > self.current_x_lim or t < 1e-6:
             self.dotted_widget.clear()
             self.scatterplotitem = pg.ScatterPlotItem(size=5, brush=pg.mkBrush(255, 240, 200, 200))
             self.dotted_widget.addItem(self.scatterplotitem)
 
-            center = np.mean(tic) / self.fs
-            self.dotted_widget.setYRange(center - (0.05 * self.chunk_size / self.fs),
-                                         center + (0.05 * self.chunk_size / self.fs))
+            # center = np.mean(tic) / self.fs
+            center = np.mean([tic[0], tac[0] - (self.chunk_size / 2)]) / self.fs
+            self.dotted_widget.setYRange(center - (0.5 * self.chunk_size / self.fs),
+                                         center + (0.5 * self.chunk_size / self.fs))
             self.dotted_widget.setXRange(t,
                                          t + self.dotted_plot_seconds)
 
             for rate in [0, 10, 30, 60, 120]:
-                slope = (rate / 86400) * (self.chunk_size / self.fs)
+                slope = (rate / 86400) * (self.chunk_size / self.fs) * (self.movement_bph / 3600)
                 x_range = [t, t + self.dotted_plot_seconds*0.95]
+                self.current_x_lim = x_range[1]
 
                 y_range = [center, center + slope * (x_range[1] - x_range[0])]
                 self.dotted_widget.plot(x_range, y_range, pen=pg.mkPen((100, 170, 240, 120), width=1))
@@ -395,10 +399,17 @@ class TimeTrace(QMainWindow):
                     self.dotted_widget.addItem(label)
                     label.setPos(x_range[1], y_range[1])
 
+        # Plot the mean
+        # self.scatterplotitem.addPoints(
+        #     [{'pos': [t, np.mean(tic) / self.fs], 'data': 1},
+        #      {'pos': [t, (np.mean(tac) - (self.chunk_size / 2)) / self.fs], 'data': 1}]
+        # )
+
+        # Plot the Unlocking
         self.scatterplotitem.addPoints(
-                [{'pos': [t, np.mean(tic) / self.fs], 'data': 1},
-                 {'pos': [t, (np.mean(tac) - (self.chunk_size / 2)) / self.fs], 'data': 1}]
-            )
+            [{'pos': [t, tic[0] / self.fs], 'data': 1, 'brush': pg.mkBrush((100, 170, 240, 200))},
+             {'pos': [t, (tac[0] - (self.chunk_size / 2)) / self.fs], 'data': 1, 'brush': pg.mkBrush((240, 120, 120, 200))}]
+        )
 
     def update_labels_continuous(self):
         """Continuously (try to) update the labels with new data."""

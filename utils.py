@@ -1,5 +1,4 @@
 import itertools
-import threading
 import time
 
 import numpy as np
@@ -28,7 +27,7 @@ def bandpass(data: np.ndarray, low: float, high: float, fs: int, order: int = 2)
     return y
 
 
-def find_beat_peaks(peaks: list, sampling_rate: int, last_tic: list = []) -> np.ndarray:
+def find_beat_peaks(peaks: list, sampling_rate: int) -> np.ndarray:
     """
     Find the best set of three peaks representing beats.
 
@@ -62,14 +61,10 @@ def find_beat_peaks(peaks: list, sampling_rate: int, last_tic: list = []) -> np.
         unlocking_duration = peak_locations[1] - peak_locations[0]
         drop_duration = peak_locations[2] - peak_locations[1]
 
-        if len(last_tic) > 0:
-            if (any(((peak_locations - last_tic) < - (10 * sampling_rate / 1000))) or
-                    any(((peak_locations - last_tic) > (10 * sampling_rate / 1000)))):
-                        return None
-
         return (MIN_BEAT_DURATION <= beat_duration <= MAX_BEAT_DURATION and
                 MIN_UNLOCKING_DURATION <= unlocking_duration <= MAX_UNLOCKING_DURATION and
-                MIN_DROP_DURATION <= drop_duration <= MAX_DROP_DURATION)
+                MIN_DROP_DURATION <= drop_duration <= MAX_DROP_DURATION and
+                np.argmax([peak[1] for peak in peak_set]) == 2)
 
     # Find all sets of three peaks that are close together
     close_peak_sets = [list(sorted(comb)) for comb in itertools.combinations(peaks, 3) if are_peaks_close(comb)]
@@ -323,20 +318,19 @@ def extract_peaks(queue, fs, liftangle, labels_queue, tics_queue):
         if not queue.empty():
             audio = queue.get()
 
-            # Smooth the signal
-            audio = bandpass(audio, 5000, 11000, fs)
-            audio = audio / max(np.abs(audio))
-            _moving_std = moving_std_dev_welford(audio, int(2 * fs / 1000))
+            # Enhance the signal
+            _moving_std = moving_std_dev_welford(audio, int(1 * fs / 1000))
+            _moving_std = _moving_std / max(np.abs(_moving_std))
 
             # Extract parameters
             chunk_size = len(audio)
             t = (chunk_count * chunk_size) / fs
 
             # Find peaks
-            peaks, attrs = find_peaks(_moving_std, height=np.std(_moving_std), width=int(1 * fs / 1000))
+            peaks, attrs = find_peaks(_moving_std, height=np.std(_moving_std), distance=int(2 * fs / 1000), prominence=0, width=int(0.5 * fs / 1000))
 
             # Create tuples of (peak_location, peak_height)
-            peak_tuples = [(peak, attrs["peak_heights"][i]) for i, peak in enumerate(peaks)]
+            peak_tuples = [(peak, attrs["prominences"][i]) for i, peak in enumerate(peaks)]
 
             # Split peaks into tic and tac based on their locations
             tic_peak_tuples = [pt for pt in peak_tuples if pt[0] < (chunk_size / 2)]
@@ -351,9 +345,16 @@ def extract_peaks(queue, fs, liftangle, labels_queue, tics_queue):
                 tics.append(tic)
                 tacs.append(tac)
                 tics_queue.put([t, tic, tac])
+                # from matplotlib import pyplot as plt
+                # plt.plot(_moving_std)
+                # plt.plot(peaks, _moving_std[peaks], 'x', label='Peaks')
+                # plt.plot(tic, _moving_std[tic], 'ro')
+                # plt.plot(tac, _moving_std[tac], 'ro')
+                # plt.show()
 
             # Calculate
             if not chunk_count % 10 and len(tics) > 10:
+
                 # Convert to array
                 temp_tics = np.array(tics)
                 temp_tacs = np.array(tacs)
@@ -398,6 +399,7 @@ def extract_peaks(queue, fs, liftangle, labels_queue, tics_queue):
                 # Store features in a queue
                 labels_queue.put([amplitude, rate, beat_error])
 
+            # Update chunk chunk count and last chunk
             chunk_count += 1
 
         else:
